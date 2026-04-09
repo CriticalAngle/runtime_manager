@@ -1,4 +1,4 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use eventsource_client::Client;
 use eventsource_client::ClientBuilder;
@@ -6,10 +6,10 @@ use futures_util::StreamExt;
 use launchdarkly_sdk_transport::HyperTransport;
 use rustpython_parser::Parse;
 use rustpython_parser::ast::{Stmt, Suite};
+use serde::Deserialize;
 use std::fs::write;
 use std::process::Command;
 use std::time::Duration;
-use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 #[allow(dead_code)]
@@ -47,12 +47,15 @@ async fn main() {
             Ok(eventsource_client::SSE::Event(e)) => {
                 if !first_received {
                     first_received = true;
-                    continue
+                    continue;
                 }
 
                 let payload: serde_json::Result<Payload> = serde_json::from_str(&e.data);
                 if !payload.is_err() {
-                    run_python_function(&payload.unwrap().data);
+                    let data = payload.unwrap().data.replace("\\n", "\n");
+                    println!("{}", data);
+
+                    run_python_function(&data);
                 }
             }
             Err(_) => {}
@@ -68,9 +71,11 @@ fn run_python_function(source: &str) {
     write("main.py", format!("{}\n{}", import_text.as_str(), source))
         .expect("Failed to write to file!");
 
-    Command::new("python3")
+    Command::new("python")
+        .stdout(std::process::Stdio::inherit())
+        .stderr(std::process::Stdio::inherit())
         .arg("main.py")
-        .output()
+        .status()
         .expect("Failed to run python");
 }
 
@@ -81,10 +86,14 @@ fn get_imports(source: &str) -> Vec<String> {
     for statement in statements {
         match statement {
             Stmt::Import(import_statement) => {
-                imports.push(import_statement.names[0].name.to_string());
+                let module = import_statement.names[0].name.to_string();
+                let modules: Vec<&str> = module.split(".").collect();
+                imports.push(modules[0].to_string());
             }
             Stmt::ImportFrom(import_from_statement) => {
-                imports.push(import_from_statement.module.unwrap().to_string());
+                let module = import_from_statement.module.unwrap().to_string();
+                let modules: Vec<&str> = module.split(".").collect();
+                imports.push(modules[0].to_string());
             }
             _ => {}
         }
