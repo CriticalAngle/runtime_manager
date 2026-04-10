@@ -1,4 +1,4 @@
-// #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use base64::{Engine, engine::general_purpose};
 use eventsource_client::Client;
@@ -37,15 +37,14 @@ async fn main() {
     let mut stream = client.stream();
 
     let mut first_received = false;
-    let mut active = false;
 
     while let Some(event) = stream.next().await {
-        if active {
-            continue;
-        }
-
         match event {
             Ok(eventsource_client::SSE::Event(e)) => {
+                if e.event_type == "keep-alive" || e.data.trim().is_empty() || e.data == "null" {
+                    continue;
+                }
+
                 if !first_received {
                     first_received = true;
                     continue;
@@ -82,13 +81,13 @@ async fn main() {
                 }
 
                 let content = content.unwrap();
+                if content.trim().is_empty() {
+                    continue;
+                }
+
                 println!("Received content:\n{}", content);
-                
-                active = true;
 
-                let _ = run_python_function(&content);
-
-                active = false;
+                run_python_function(&content).await;
             }
             Err(_) => {}
             _ => {}
@@ -104,13 +103,15 @@ fn run_command(command: &str, path: &str) -> Result<(), String> {
         .status();
 
     if command.is_err() {
-        return Err(command.err().unwrap().to_string());
+        Err(command.err().unwrap().to_string())
     } else {
-        return Ok(());
+        Ok(())
     }
 }
 
 async fn run_python_function(source: &str) {
+    println!("Sending request to clear database entry");
+
     let client = reqwest::Client::new();
     let body = serde_json::json!({ "pythonContent": "" });
 
@@ -121,11 +122,15 @@ async fn run_python_function(source: &str) {
         return;
     }
 
+    println!("Cleared database entry");
+
     let imports = get_imports(&source);
     if imports.is_err() {
         println!("Import parsing error");
         return;
     }
+
+    println!("Collected imports");
 
     let import_text = get_install_packages_text(imports.unwrap());
 
