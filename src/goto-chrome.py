@@ -1,30 +1,9 @@
-from pynput.keyboard import Key, Controller
+from pynput.mouse import Controller
+import random
 from time import sleep
 
-KB = Controller()
-PAUSE = 0.5
+mouse = Controller()
 
-def goto(link):
-    KB.press(Key.cmd)
-    KB.release(Key.cmd)
-
-    sleep(PAUSE)
-
-    KB.type("Chrome")
-
-    sleep(PAUSE)
-
-    KB.press(Key.enter)
-    KB.release(Key.enter)
-
-    sleep(PAUSE)
-
-    KB.type(link)
-
-    sleep(PAUSE)
-
-    KB.press(Key.enter)
-    KB.release(Key.enter)
-
-if __name__ == '__main__':
-    goto("criticalanglestudios.com")
+for _ in range(15):
+    mouse.move(int(random.random() * 1000), int(random.random() * 1000))
+    sleep(1)
